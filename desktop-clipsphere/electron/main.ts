@@ -14,7 +14,7 @@ process.env.VITE_PUBLIC = VITE_DEV_SERVER_URL ? path.join(process.env.APP_ROOT, 
 
 let win: BrowserWindow | null = null
 let studio: BrowserWindow | null = null
-let floatingWebCam: BrowserWindow | null = null
+let pendingMediaSources: { screen: string; id: string; audio: string; preset: 'HD' | 'SD'; plan: 'PRO' | 'FREE' } | null = null
 
 function createWindow() {
   win = new BrowserWindow({
@@ -57,30 +57,12 @@ function createWindow() {
     },
   });
 
-  floatingWebCam = new BrowserWindow({
-    width: 350,
-    height: 300,
-    minHeight: 300,
-    minWidth: 300,
-    frame: false,
-    transparent: true,
-    alwaysOnTop: true,
-    focusable: false,
-    icon: path.join(process.env.VITE_PUBLIC, 'clipsphere-mark.svg'),
-    webPreferences: {
-      nodeIntegration: false,
-      contextIsolation: true,
-      devTools: true,
-      preload: path.join(__dirname, 'preload.mjs'),
-    },
-  });
-
   win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
   win.setAlwaysOnTop(true, 'screen-saver', 1);
   studio.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
   studio.setAlwaysOnTop(true, 'screen-saver', 1);
-  floatingWebCam.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
-  floatingWebCam.setAlwaysOnTop(true, 'screen-saver', 1);
+  // The recording tray becomes visible once the signed-in app supplies settings.
+  studio.hide()
 
   win.webContents.on('did-finish-load', () => {
     console.log("✅ Main window loaded");
@@ -90,6 +72,10 @@ function createWindow() {
   studio.webContents.on("did-finish-load", () => {
     console.log("✅ studio.html loaded successfully!");
     studio?.webContents.send("main-process-message", new Date().toLocaleString());
+    if (pendingMediaSources) {
+      studio?.webContents.send('profile-recieved', pendingMediaSources)
+      studio?.showInactive()
+    }
   });
 
   // Add error event listeners for debugging
@@ -111,15 +97,11 @@ function createWindow() {
     console.log("🔍 Attempting to load studio URL:", studioUrl);
     studio.loadURL(studioUrl);
   
-    const webcamUrl = new URL('webcam.html', VITE_DEV_SERVER_URL).toString();
-    console.log("🔍 Attempting to load webcam URL:", webcamUrl);
-    floatingWebCam.loadURL(webcamUrl);
   } else {
     console.log("⚠️ VITE_DEV_SERVER_URL NOT detected, loading from dist.");
   
     win.loadFile(path.join(RENDERER_DIST, 'index.html'));
     studio.loadFile(path.join(RENDERER_DIST, 'studio.html'));
-    floatingWebCam.loadFile(path.join(RENDERER_DIST, 'webcam.html'));
   }
 }
 
@@ -129,7 +111,6 @@ app.on('window-all-closed', () => {
     app.quit();
     win = null;
     studio = null;
-    floatingWebCam = null;
   }
 });
 
@@ -138,7 +119,6 @@ ipcMain.on('closeApp', () => {
     app.quit();
     win = null;
     studio = null;
-    floatingWebCam = null;
   }
 });
 
@@ -155,13 +135,12 @@ ipcMain.handle('getSources', async () => {
 
 // ✅ Fix: Ensure `studio` is assigned and used correctly
 ipcMain.on('media-sources', (_event, payload) => {
-  // console.log("Event: media-sources received", payload);
-  // console.log("Studio Window:", studio);
-  if (studio) {
-    studio.webContents.send('profile-recieved', payload);
-    // console.log("Sent to studio window");
-  } else {
-    // console.log("Studio window is null!");
+  if (!payload?.screen || !payload?.id || !payload?.preset || !payload?.plan || typeof payload.audio !== 'string') return
+  pendingMediaSources = payload
+  if (studio && !studio.isDestroyed()) {
+    if (studio.webContents.isLoading()) return
+    studio.webContents.send('profile-recieved', payload)
+    studio.showInactive()
   }
 });
 

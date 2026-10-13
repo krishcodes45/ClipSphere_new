@@ -43,8 +43,8 @@ const MediaConfiguration = ({state , user}: Props) => {
     user?.id || '',
     user?.studio?.screen || state.displays?.[0].id,
     user?.studio?.mic || state.audioInputs?.[0].deviceId,
-    user?.studio?.preset,
-    user?.subscription?.plan
+    user?.studio?.preset || 'SD',
+    user?.subscription?.plan || 'FREE'
   )
   
   return (

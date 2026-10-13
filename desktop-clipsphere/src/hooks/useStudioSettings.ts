@@ -43,7 +43,7 @@ const { mutate, isPending } = useMutation({
   });
   
   useEffect(() => {
-    if (screen && audio ) {
+    if (screen && id && preset && plan) {
       window.ipcRenderer.send('media-sources', {
         screen,
         id : id,
