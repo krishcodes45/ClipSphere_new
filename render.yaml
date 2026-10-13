@@ -15,6 +15,8 @@ services:
         value: gemini-2.0-flash
       - key: GOOGLE_APPLICATION_CREDENTIALS
         value: /etc/secrets/clipsphere-service-account.json
+      - key: GOOGLE_SERVICE_ACCOUNT_JSON
+        sync: false
       - key: CLERK_SECRET_KEY
         sync: false
       - key: CLIPSPHERE_WEBHOOK_SECRET

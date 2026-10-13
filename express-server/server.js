@@ -49,7 +49,12 @@ const s3 = new S3Client({
   region: process.env.BUCKET_REGION,
 });
 
-const speechClient = new speech.SpeechClient();
+const googleServiceAccount = process.env.GOOGLE_SERVICE_ACCOUNT_JSON
+  ? JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON)
+  : undefined;
+const speechClient = new speech.SpeechClient(
+  googleServiceAccount ? { credentials: googleServiceAccount } : undefined,
+);
 const apiAuthHeaders = process.env.CLIPSPHERE_WEBHOOK_SECRET
   ? { Authorization: `Bearer ${process.env.CLIPSPHERE_WEBHOOK_SECRET}` }
   : {};

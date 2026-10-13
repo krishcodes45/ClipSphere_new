@@ -27,7 +27,7 @@ The existing database has the ClipSphere tables. If you create a different Postg
 
 1. In Render, create a Blueprint from this repository and choose the `render.yaml` file. It defines a free Docker web service, installs FFmpeg/FFprobe, and checks `/health`.
 2. Set the prompted secret values from the existing `express-server/.env`. Use the same production Clerk secret and webhook secret as Vercel.
-3. Add a Render **Secret File** named `clipsphere-service-account.json`, and paste in the Google service-account JSON contents. The service is configured to read it from `/etc/secrets/clipsphere-service-account.json`.
+3. Set `GOOGLE_SERVICE_ACCOUNT_JSON` to the contents of the Google service-account JSON file as a secret environment variable. The backend passes this credential object directly to Google Speech-to-Text. Alternatively, you can use a Render Secret File named `clipsphere-service-account.json` at `/etc/secrets/clipsphere-service-account.json` and leave `GOOGLE_SERVICE_ACCOUNT_JSON` unset.
 4. Set the service values that depend on deployment URLs:
 
    - `NEXT_API_HOST` — `https://<your-vercel-domain>/api/` (keep the trailing slash)
@@ -35,7 +35,7 @@ The existing database has the ClipSphere tables. If you create a different Postg
    - `CLERK_SECRET_KEY` — the same production Clerk secret as Vercel
    - `CLIPSPHERE_WEBHOOK_SECRET` — the same value as Vercel
    - `BUCKET_NAME`, `ACCESS_KEY`, `SECRET_KEY`, `BUCKET_REGION`, and `GEMINI_API_KEY` — from your existing local server environment
-   - `GOOGLE_APPLICATION_CREDENTIALS` — `/etc/secrets/clipsphere-service-account.json`
+   - `GOOGLE_SERVICE_ACCOUNT_JSON` — the contents of the Google service-account JSON file, stored as a secret env var (or use the Secret File option above)
 
 5. After Render deploys, check `https://<your-render-service>.onrender.com/health` for `{"status":"ok"}`.
 
