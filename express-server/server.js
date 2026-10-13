@@ -26,10 +26,14 @@ const allowedOrigins = [
   process.env.WEB_APP_API_URL,
   'null',
 ].filter(Boolean);
+const previewOriginPattern = process.env.WEB_APP_PREVIEW_ORIGIN_PATTERN
+  ? new RegExp(process.env.WEB_APP_PREVIEW_ORIGIN_PATTERN, 'i')
+  : null;
+const isAllowedOrigin = (origin) => !origin || allowedOrigins.includes(origin) || Boolean(previewOriginPattern?.test(origin));
 const io = new Server(server, {
   maxHttpBufferSize: 10 * 1024 * 1024,
   cors: {
-    origin: allowedOrigins,
+    origin: (origin, callback) => callback(null, isAllowedOrigin(origin)),
     methods: ['GET', 'POST'],
   },
 });
@@ -59,7 +63,7 @@ const apiAuthHeaders = process.env.CLIPSPHERE_WEBHOOK_SECRET
   ? { Authorization: `Bearer ${process.env.CLIPSPHERE_WEBHOOK_SECRET}` }
   : {};
 
-app.use(cors({ origin: allowedOrigins }));
+app.use(cors({ origin: (origin, callback) => callback(null, isAllowedOrigin(origin)) }));
 app.get('/health', (_request, response) => response.json({ status: 'ok' }));
 
 io.use(async (socket, next) => {
@@ -78,9 +82,12 @@ io.use(async (socket, next) => {
 io.on('connection', (socket) => {
   console.log('🟢 Socket connected:', socket.id);
 
-  socket.on('video-chunks', async (data) => {
+  socket.on('video-chunks', async (data, acknowledge) => {
     const filename = safeRecordingName(data?.filename);
-    if (!filename || !belongsToUser(filename, socket.data.userId) || !data?.chunks) return;
+    if (!filename || !belongsToUser(filename, socket.data.userId) || !data?.chunks) {
+      acknowledge?.({ ok: false, error: 'Invalid recording upload chunk.' });
+      return;
+    }
 
     const filePath = path.join(uploadDirectory, filename);
     const previousWrite = pendingWrites.get(filePath) || Promise.resolve();
@@ -92,17 +99,22 @@ io.on('connection', (socket) => {
       await fs.promises.appendFile(filePath, buffer);
     });
     pendingWrites.set(filePath, nextWrite);
-    nextWrite.catch((error) => {
+    nextWrite.then(() => acknowledge?.({ ok: true })).catch((error) => {
       console.error('Unable to save recording chunk:', error.message);
+      acknowledge?.({ ok: false, error: 'The recording chunk could not be saved.' });
     }).finally(() => {
       if (pendingWrites.get(filePath) === nextWrite) pendingWrites.delete(filePath);
     });
   });
 
-  socket.on('process-video', async (data) => {
+  socket.on('process-video', async (data, acknowledge) => {
     const filename = safeRecordingName(data?.filename);
     const userId = socket.data.userId;
+    const workspaceId = typeof data?.workspaceId === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(data.workspaceId)
+      ? data.workspaceId
+      : undefined;
     if (!filename || !belongsToUser(filename, userId)) {
+      acknowledge?.({ ok: false, error: 'Invalid recording details.' });
       return socket.emit('processing-error', { message: 'Invalid recording details.' });
     }
 
@@ -113,10 +125,12 @@ io.on('connection', (socket) => {
       await pendingWrites.get(filePath);
     } catch (error) {
       console.error('Unable to finish saving recording:', error.message);
+      acknowledge?.({ ok: false, error: 'The recording could not be saved.' });
       return socket.emit('processing-error', { message: 'The recording could not be saved.' });
     }
 
     if (!fs.existsSync(filePath)) {
+      acknowledge?.({ ok: false, error: 'The recording upload is incomplete.' });
       socket.emit('processing-error', { message: 'The recording upload is incomplete. Please try again.' });
       return;
     }
@@ -126,6 +140,7 @@ io.on('connection', (socket) => {
       console.log('🟢 Verifying WebM file integrity...');
       const isValid = await verifyWebMFile(filePath);
       if (!isValid) {
+        acknowledge?.({ ok: false, error: 'The recording file could not be opened.' });
         socket.emit('processing-error', { message: 'The recording file could not be opened. Please record again.' });
         return;
       }
@@ -133,9 +148,10 @@ io.on('connection', (socket) => {
       // 🔹 Notify Next.js API
       await axios.post(
         `${process.env.NEXT_API_HOST}recording/${userId}/processing`,
-        { filename: uniqueFilename },
+        { filename: uniqueFilename, ...(workspaceId ? { workspaceId } : {}) },
         { headers: apiAuthHeaders }
       );
+      acknowledge?.({ ok: true, filename: uniqueFilename });
 
       // 🔹 Upload video to AWS S3
       await new Upload({
@@ -182,6 +198,7 @@ io.on('connection', (socket) => {
       console.log(`🟢 Deleted processed files: ${data.filename}`);
     } catch (error) {
       console.error('🔴 Error processing video:', error);
+      acknowledge?.({ ok: false, error: 'Video processing could not be started.' });
       socket.emit('processing-error', { message: 'Video processing failed.' });
       await axios.post(
         `${process.env.NEXT_API_HOST}recording/${userId}/failed`,
@@ -246,22 +263,37 @@ async function extractAudio(videoPath, outputAudioPath) {
 
 // 🎯 Function: Transcribe audio using Google Speech-to-Text
 async function transcribeAudio(filePath) {
-  const audioBytes = fs.readFileSync(filePath).toString('base64');
-
-  const request = {
-    audio: { content: audioBytes },
-    config: {
-      encoding: 'LINEAR16',
-      sampleRateHertz: 16000,
-      languageCode: 'en-US',
-    },
-  };
-
+  const segmentPrefix = path.join(path.dirname(filePath), `${uuidv4()}-segment-`);
+  const segmentPattern = `${segmentPrefix}%03d.wav`;
+  const segmentPaths = [];
   try {
-    const [response] = await speechClient.recognize(request);
-    return response.results.map((result) => result.alternatives[0].transcript).join('\n');
+    await new Promise((resolve, reject) => {
+      ffmpeg(filePath)
+        .outputOptions(['-f segment', '-segment_time 50', '-reset_timestamps 1'])
+        .output(segmentPattern)
+        .on('end', resolve)
+        .on('error', reject)
+        .run();
+    });
+    const prefixName = path.basename(segmentPrefix);
+    const names = (await fs.promises.readdir(path.dirname(filePath)))
+      .filter((name) => name.startsWith(prefixName) && name.endsWith('.wav'))
+      .sort();
+    segmentPaths.push(...names.map((name) => path.join(path.dirname(filePath), name)));
+    const transcripts = [];
+    for (const segmentPath of segmentPaths) {
+      const audioBytes = await fs.promises.readFile(segmentPath, 'base64');
+      const [response] = await speechClient.recognize({
+        audio: { content: audioBytes },
+        config: { encoding: 'LINEAR16', sampleRateHertz: 16000, languageCode: 'en-US' },
+      });
+      transcripts.push(response.results.map((result) => result.alternatives[0].transcript).join('\n'));
+    }
+    return transcripts.filter(Boolean).join('\n');
   } catch (error) {
     console.error('🔴 Error during transcription:', error);
     return null;
+  } finally {
+    await Promise.all(segmentPaths.map((segmentPath) => fs.promises.unlink(segmentPath).catch(() => {})));
   }
 }

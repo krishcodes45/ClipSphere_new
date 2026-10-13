@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import { WorkspaceActions } from '@/components/workspace-actions'
+import { StudioRecorder } from '@/components/studio-recorder'
 
 type Recording = { id: string; title: string; description: string; status: string; createdAt: string; firstName: string | null; lastName: string | null }
 type Member = { id: string; email: string; firstName: string | null; lastName: string | null; role: string }
@@ -12,8 +13,9 @@ export function WorkspaceDetail({ workspace, recordings, members }: { workspace:
     <div className="workspace-detail-grid">
       <div className="workspace-content">
         <section className="recordings-section">
-          <div className="section-heading"><div><span className="eyebrow">LIBRARY</span><h2>Recordings <span className="count-badge">{recordings.length}</span></h2></div><span className="muted">New clips appear here after desktop processing.</span></div>
-          {recordings.length === 0 ? <div className="empty-state panel"><span className="empty-icon">◉</span><h3>Your first recording belongs here</h3><p>Record from the ClipSphere desktop app. Once it finishes processing, your video, transcript, and summary will show up in this workspace.</p></div> : (
+          <StudioRecorder workspaceId={workspace.id} role={workspace.role} />
+          <div className="section-heading"><div><span className="eyebrow">LIBRARY</span><h2>Recordings <span className="count-badge">{recordings.length}</span></h2></div><span className="muted">New recordings appear here after processing.</span></div>
+          {recordings.length === 0 ? <div className="empty-state panel"><span className="empty-icon">◉</span><h3>Your first recording belongs here</h3><p>Start a recording above. Your video, transcript, and summary will appear in this workspace automatically.</p></div> : (
             <div className="recording-list">{recordings.map((recording) => <Link href={`/recordings/${recording.id}`} className="recording-row" key={recording.id}>
               <span className="recording-thumbnail">◉</span><span className="recording-row-copy"><strong>{recording.title}</strong><span>{recording.description || 'No description yet'}</span></span>
               <span className={`status-pill status-${recording.status.toLowerCase()}`}>{recording.status.toLowerCase()}</span><span className="recording-date">{new Date(recording.createdAt).toLocaleDateString()}</span><span className="arrow">↗</span>

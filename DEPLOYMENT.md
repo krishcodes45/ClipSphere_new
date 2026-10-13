@@ -1,6 +1,6 @@
 # Free-tier hosting
 
-This repository is prepared for a Vercel web deployment and a Render processing service. Keep the existing PostgreSQL database and S3 bucket configured in the supplied environment; the database schema migration has already been applied to that configured database. The desktop app needs a production build after the hosted URLs are known.
+This repository is prepared for a Vercel web app and a Render background processing service. Keep the existing PostgreSQL database and S3 bucket configured in the supplied environment; the database schema migration has already been applied to that configured database. Recording starts inside a signed-in Vercel workspace.
 
 ## 1. Deploy the web app to Vercel
 
@@ -17,7 +17,7 @@ This repository is prepared for a Vercel web deployment and a Render processing 
    - `S3_BUCKET_NAME`
    - `CLIPSPHERE_WEBHOOK_SECRET`
    - `NEXT_PUBLIC_APP_URL` — the final Vercel URL, including `https://`
-   - `NEXT_PUBLIC_DESKTOP_ORIGIN` — `http://localhost:5173` for desktop development; packaged Electron requests use the `null` origin already allowed by the app
+   - `NEXT_PUBLIC_PROCESSING_URL` — `https://<your-render-service>.onrender.com` (no trailing slash)
 
 4. Use production Clerk keys and add the Vercel domain to the Clerk instance's allowed origins and redirect URLs. Redeploy after setting environment values.
 
@@ -32,6 +32,7 @@ The existing database has the ClipSphere tables. If you create a different Postg
 
    - `NEXT_API_HOST` — `https://<your-vercel-domain>/api/` (keep the trailing slash)
    - `WEB_APP_API_URL` — `https://<your-vercel-domain>`
+   - `WEB_APP_PREVIEW_ORIGIN_PATTERN` — `^https://clip-sphere-[a-z0-9-]+-varchasvis-projects\.vercel\.app$` (allows the project's unique Vercel Preview hostnames; Clerk tokens are still required)
    - `CLERK_SECRET_KEY` — the same production Clerk secret as Vercel
    - `CLIPSPHERE_WEBHOOK_SECRET` — the same value as Vercel
    - `BUCKET_NAME`, `ACCESS_KEY`, `SECRET_KEY`, `BUCKET_REGION`, and `GEMINI_API_KEY` — from your existing local server environment
@@ -39,9 +40,9 @@ The existing database has the ClipSphere tables. If you create a different Postg
 
 5. After Render deploys, check `https://<your-render-service>.onrender.com/health` for `{"status":"ok"}`.
 
-## 3. Build a desktop app that uses the hosted services
+## 3. Browser recording flow
 
-Copy `desktop-clipsphere/.env.production.example` to `desktop-clipsphere/.env.production.local`, replace the three values with your production Clerk publishable key, Vercel API URL, and Render Socket.IO URL, then run `npm run build` in `desktop-clipsphere`. This creates a Windows installer configured for the hosted services; the existing `.env.local` remains for local development.
+After deploying the Vercel app and Render processor, sign in to the web app and open a workspace as an owner or editor. The workspace page starts recording through Chrome or Edge's screen, microphone, and optional camera permission prompts. Set `NEXT_PUBLIC_PROCESSING_URL` to the Render service URL in each Vercel environment, and set Render's `WEB_APP_API_URL` to the matching Vercel origin so Socket.IO accepts the browser connection. The recording is uploaded to the authenticated processor, then appears in the selected workspace with its transcript and summary.
 
 ## Free-tier limits
 
