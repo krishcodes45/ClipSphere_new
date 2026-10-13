@@ -1,0 +1,10 @@
+node_modules
+temp_upload
+.env
+.env.*
+!.env.example
+clipsphere-key.json
+*-service-account.json
+*-credentials.json
+*.key.json
+npm-debug.log*

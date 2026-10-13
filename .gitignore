@@ -1,0 +1,20 @@
+# Local credentials and runtime files
+.env
+.env.*
+!.env.example
+!**/.env.production.example
+!**/.env.example
+!**/.env.production.example
+**/node_modules/
+**/.next/
+**/dist/
+**/dist-electron/
+**/release/
+**/*.tsbuildinfo
+**/.turbo/
+**/temp_upload/
+**/*.log
+**/clipsphere-key.json
+**/*-service-account.json
+**/*-credentials.json
+*.local

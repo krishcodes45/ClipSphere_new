@@ -1,0 +1,35 @@
+services:
+  - type: web
+    name: clipsphere-processing
+    runtime: docker
+    plan: free
+    dockerfilePath: ./express-server/Dockerfile
+    dockerContext: ./express-server
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: ELECTRON_HOST
+        value: http://localhost:5173
+      - key: GEMINI_MODEL
+        value: gemini-2.0-flash
+      - key: GOOGLE_APPLICATION_CREDENTIALS
+        value: /etc/secrets/clipsphere-service-account.json
+      - key: CLERK_SECRET_KEY
+        sync: false
+      - key: CLIPSPHERE_WEBHOOK_SECRET
+        sync: false
+      - key: NEXT_API_HOST
+        sync: false
+      - key: WEB_APP_API_URL
+        sync: false
+      - key: BUCKET_NAME
+        sync: false
+      - key: ACCESS_KEY
+        sync: false
+      - key: SECRET_KEY
+        sync: false
+      - key: BUCKET_REGION
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
