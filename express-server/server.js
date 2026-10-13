@@ -59,9 +59,14 @@ const googleServiceAccount = process.env.GOOGLE_SERVICE_ACCOUNT_JSON
 const speechClient = new speech.SpeechClient(
   googleServiceAccount ? { credentials: googleServiceAccount } : undefined,
 );
-const apiAuthHeaders = process.env.CLIPSPHERE_WEBHOOK_SECRET
-  ? { Authorization: `Bearer ${process.env.CLIPSPHERE_WEBHOOK_SECRET}` }
-  : {};
+const apiAuthHeaders = {
+  ...(process.env.CLIPSPHERE_WEBHOOK_SECRET
+    ? { Authorization: `Bearer ${process.env.CLIPSPHERE_WEBHOOK_SECRET}` }
+    : {}),
+  ...(process.env.VERCEL_AUTOMATION_BYPASS_SECRET
+    ? { 'x-vercel-protection-bypass': process.env.VERCEL_AUTOMATION_BYPASS_SECRET }
+    : {}),
+};
 
 app.use(cors({ origin: (origin, callback) => callback(null, isAllowedOrigin(origin)) }));
 app.get('/health', (_request, response) => response.json({ status: 'ok' }));
