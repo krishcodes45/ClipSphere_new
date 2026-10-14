@@ -177,11 +177,17 @@ io.on('connection', (socket) => {
       // 🔹 Transcribe Audio using Google Speech-to-Text
       const transcriptionText = await transcribeAudio(audioPath);
 
-      if (transcriptionText && model) {
-        // 🔹 Generate title & summary using Gemini
-        const prompt = `You are going to generate a title and a nice description using the speech-to-text transcription provided: transcription(${transcriptionText}). Return it in JSON format as {"title": <the title you gave>, "summary": <the summary you created>}`;
-        const completionResponse = await model.generateContent(prompt);
-        const completionResult = await completionResponse.response.text();
+      if (transcriptionText) {
+        let completionResult = JSON.stringify({ title: '', summary: '' });
+        if (model) {
+          try {
+            const prompt = `You are going to generate a title and a nice description using the speech-to-text transcription provided: transcription(${transcriptionText}). Return it in JSON format as {"title": <the title you gave>, "summary": <the summary you created>}`;
+            const completionResponse = await model.generateContent(prompt);
+            completionResult = await completionResponse.response.text();
+          } catch (error) {
+            console.error('AI summary unavailable; saving transcript anyway:', error.message);
+          }
+        }
 
         await axios.post(`${process.env.NEXT_API_HOST}recording/${userId}/transcribe`, {
           filename: uniqueFilename,
